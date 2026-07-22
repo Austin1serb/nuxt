@@ -27,7 +27,7 @@ import { renderInlineStyles } from '../utils/renderer/inline-styles'
 import { renderStreamedIslandTeleports, replaceIslandTeleports } from '../utils/renderer/islands'
 import { serverDiagnostics } from '../diagnostics'
 import { renderSSRHeadOptions } from '#internal/unhead.config.mjs'
-import { NUXT_ASYNC_CONTEXT, NUXT_EARLY_HINTS, NUXT_INLINE_STYLES, NUXT_NO_SCRIPTS, NUXT_NO_SCRIPTS_PATTERNS, NUXT_PAYLOAD_EXTRACTION, NUXT_PAYLOAD_INLINE, NUXT_RUNTIME_PAYLOAD_EXTRACTION, NUXT_SSR_STREAMING, NUXT_SSR_STREAMING_BOT_RE, PARSE_ERROR_DATA } from '#internal/nuxt/nitro-config.mjs'
+import { NUXT_ASYNC_CONTEXT, NUXT_EARLY_HINTS, NUXT_INLINE_STYLES, NUXT_NO_SCRIPTS, NUXT_NO_SCRIPTS_PATTERNS, NUXT_PAYLOAD_EXTRACTION, NUXT_PAYLOAD_INLINE, NUXT_RUNTIME_PAYLOAD_EXTRACTION, NUXT_SSR_STREAMING, NUXT_SSR_STREAMING_BOT_RE, NUXT_VIEW_TRANSITIONS, PARSE_ERROR_DATA } from '#internal/nuxt/nitro-config.mjs'
 import { appHead, appTeleportAttrs, appTeleportTag, componentIslands, componentIslandsActive, tracingChannelNuxt } from '#internal/nuxt.config.mjs'
 import entryIds from 'nuxt/entry-ids'
 import { entryFileName } from 'nuxt/entry-chunk'
@@ -264,8 +264,14 @@ async function renderRoute (event: H3Event, ssrError?: (NuxtPayload['error'] & {
 
   if (NO_SCRIPTS) {
     pushSpeculationRules(ssrContext)
+    if (NUXT_VIEW_TRANSITIONS) {
+      pushCrossDocumentViewTransition(ssrContext)
+    }
   } else if (NUXT_NO_SCRIPTS_PATTERNS.length) {
     pushNoScriptsLinkHints(ssrContext)
+    if (NUXT_VIEW_TRANSITIONS) {
+      pushCrossDocumentViewTransition(ssrContext)
+    }
   }
 
   // 0. Add import map for stable chunk hashes
@@ -413,8 +419,14 @@ async function renderStreamedResponse (ctx: {
 
   if (NO_SCRIPTS) {
     pushSpeculationRules(ssrContext)
+    if (NUXT_VIEW_TRANSITIONS) {
+      pushCrossDocumentViewTransition(ssrContext)
+    }
   } else if (NUXT_NO_SCRIPTS_PATTERNS.length) {
     pushNoScriptsLinkHints(ssrContext)
+    if (NUXT_VIEW_TRANSITIONS) {
+      pushCrossDocumentViewTransition(ssrContext)
+    }
   }
 
   // 1. Set HTTP Link headers with entry-point preload hints (fastest resource hinting)
@@ -839,6 +851,21 @@ async function renderStreamedResponse (ctx: {
   event.res.headers.set('x-powered-by', 'Nuxt')
 
   return new FastResponse(outputStream, event.res)
+}
+
+/**
+ * Pages served without scripts navigate with full page loads. When view
+ * transitions are enabled, opting into same-origin cross-document view
+ * transitions declaratively animates those navigations without a client
+ * runtime (the client-side `startViewTransition` plugin is not shipped).
+ */
+function pushCrossDocumentViewTransition (ssrContext: NuxtSSRContext) {
+  ssrContext.head.push({
+    style: [{
+      tagPosition: 'head',
+      innerHTML: '@view-transition{navigation:auto}',
+    }],
+  })
 }
 
 /**
